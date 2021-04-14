@@ -49,12 +49,15 @@
 
 #include "fs_mgr_priv.h"
 #include "fs_mgr_priv_verity.h"
+#include "fs_mgr_fivm.h"
 
 #define KEY_LOC_PROP   "ro.crypto.keyfile.userdata"
 #define KEY_IN_FOOTER  "footer"
 
 #define E2FSCK_BIN      "/system/bin/e2fsck"
 #define F2FS_FSCK_BIN  "/system/bin/fsck.f2fs"
+#define RESIZE_FS_BIN "/system/bin/resize2fs"
+#define SETUP_FS_BIN  "/system/bin/setup_fs"
 #define MKSWAP_BIN      "/system/bin/mkswap"
 
 #define FSCK_LOG_FILE   "/dev/fscklogs/log"
@@ -93,6 +96,95 @@ static int wait_for_file(const char *filename, int timeout)
     return ret;
 }
 
+static int resize_ext4(const char *blockdev)
+{
+    char buf[256], path[128];
+    pid_t child;
+    int status, n;
+    ERROR("resize_ext4 %s \n",blockdev);
+
+    sprintf(buf,  "%s", blockdev);
+
+tryagain:
+    ERROR("begin to resize ext4 buffer : %s \n", buf);
+    child = fork();
+    if (child < 0) {
+        fprintf(stderr, "error: fork failed\n");
+        return 0;
+    }
+    if (child == 0) {
+        execl(RESIZE_FS_BIN, RESIZE_FS_BIN,"-f", buf, NULL);
+    }else{
+		waitpid(child, &status, 0);
+		ERROR("finish reize to ext4: %s \n",buf);
+		if (WEXITSTATUS(status) != 0) {
+			ERROR("exec: pid %1d exited with return code %d: %s \n",
+			(int)child, WEXITSTATUS(status), strerror(status));
+			sleep(3);
+		}
+    }
+    return 1;
+}
+/* setupfs, format a device to ext4 */
+const char *mkext4fs = "/system/bin/make_ext4fs";
+
+int setup_ext4(const char *blockdev)
+{
+    char buf[256], path[128];
+    pid_t child;
+    int status, n;
+
+	/* we might be looking at an indirect reference */
+    n = readlink(blockdev, path, sizeof(path) - 1);
+	if (n < 0) {
+		fprintf(stderr, "readlink err: %d\n", errno);
+		n = strlen(blockdev);
+		strcpy(path, blockdev);
+	}
+
+    if (n > 0) {
+        path[n] = 0;
+        if (!memcmp(path, "/dev/block/", 11))
+            blockdev = path + 11;
+    }
+
+    if (strchr(blockdev,'/')) {
+        fprintf(stderr, "not a block device name: %s\n", blockdev);
+        return 0;
+    }
+
+    sprintf(buf,"/sys/fs/ext4/%s", blockdev);
+    if (access(buf, F_OK) == 0) {
+        fprintf(stderr, "device %s already has a filesystem\n", blockdev);
+        return 0;
+    }
+    sprintf(buf, "/dev/block/%s", blockdev);
+
+    fprintf(stderr, "+++\n");
+
+tryagain:
+	ERROR("begin to format ext4 buffer : %s", buf);
+    child = fork();
+    if (child < 0) {
+        fprintf(stderr, "error: fork failed\n");
+        return 0;
+    }
+    if (child == 0) {
+        execl(mkext4fs, mkext4fs, buf, NULL);
+    }else{
+		waitpid(child, &status, 0);
+		ERROR("finish format to ext4: %s",buf);
+		if (WEXITSTATUS(status) != 0) {
+			ERROR("exec: pid %1d exited with return code %d: %s", (int)child, WEXITSTATUS(status), strerror(status));
+			sleep(3);
+			goto tryagain;
+		}
+    }
+
+    //while (waitpid(-1, &status, 0) != child) ;
+
+    return 1;
+}
 static void check_fs(char *blk_device, char *fs_type, char *target)
 {
     int status;
@@ -103,6 +195,11 @@ static void check_fs(char *blk_device, char *fs_type, char *target)
         E2FSCK_BIN,
         "-f",
         "-y",
+        blk_device
+    };
+
+    char *setupfs_argv[] = {
+        SETUP_FS_BIN,
         blk_device
     };
 
@@ -142,7 +239,18 @@ static void check_fs(char *blk_device, char *fs_type, char *target)
                 ERROR("%s(): umount(%s)=%d: %s\n", __func__, target, result, strerror(errno));
                 sleep(1);
             }
-        }
+        } else {
+			//setup_ext4(blk_device);
+		ret = android_fork_execvp_ext(ARRAY_SIZE(setupfs_argv), setupfs_argv,
+                                          &status, true, LOG_KLOG | LOG_FILE,
+                                          true, FSCK_LOG_FILE, NULL, 0);
+		}
+
+           if (ret < 0) {
+                /* No need to check for error in fork, we can't really handle it now */
+                ERROR("Failed trying to setupfs run %s\n", SETUP_FS_BIN);
+            }
+
 
         /*
          * Some system images do not have e2fsck for licensing reasons
@@ -177,6 +285,45 @@ static void check_fs(char *blk_device, char *fs_type, char *target)
         if (ret < 0) {
             /* No need to check for error in fork, we can't really handle it now */
             ERROR("Failed trying to run %s\n", F2FS_FSCK_BIN);
+        }
+	} else if (!strcmp(fs_type, "vfat"))
+    {
+        ret = mount(blk_device, target, fs_type, 0, 0);
+        if (! ret) {
+            umount(target);
+        }else{
+            int child;
+            int status=0;
+            if (!strcmp(blk_device, "/dev/block/by-name/Reserve0"))
+            {
+                ERROR("start format %s", blk_device);
+                child = fork();
+                if (child == 0) {
+                    ERROR("fork to format %s fileSystem: Fat16 ", blk_device);
+                    execl("/system/bin/newfs_msdos","/system/bin/newfs_msdos",
+                        "-F","16","-c","4", blk_device, NULL);
+                    exit(-1);
+                }
+                ERROR("wait for format %s", blk_device);
+                while (waitpid(-1, &status, 0) != child) ;
+                if (status==0)
+                   ERROR("format %s ok", blk_device);
+            }
+            else
+            {
+                ERROR("start format %s", blk_device);
+                child = fork();
+                if (child == 0) {
+                    ERROR("fork to format %s", blk_device);
+                    execl("/system/bin/newfs_msdos","/system/bin/newfs_msdos",
+                        "-F","32","-O","android","-c","8",blk_device, NULL);
+                    exit(-1);
+                }
+                ERROR("wait for format %s", blk_device);
+                while (waitpid(-1, &status, 0) != child) ;
+                if (status==0)
+                    ERROR("format %s ok", blk_device);
+            }
         }
     }
 
@@ -274,14 +421,45 @@ static int device_is_debuggable() {
     return strcmp(value, "1") ? 0 : 1;
 }
 
+#define CHECK_SOC_SECURE_ATTR 0x00
+/*
+	+ * Check secure solution or not
+	+ * Return 0 if normal , return 1 if secure
+	+ */
+static int check_soc_is_secure(void)
+{
+	int fd, ret, try_cnt = 100;
+RETRY:
+	fd = open("/dev/sunxi_soc_info", O_RDONLY);
+	if (fd == -1) {
+		usleep(10);
+		ERROR("open /dev/sunxi_soc_info failed! %d\n", try_cnt);
+		if(try_cnt--)
+		goto RETRY;
+		return 0 ;
+	}
+
+	ret = ioctl(fd, CHECK_SOC_SECURE_ATTR, NULL);
+	if(ret == 1){
+		ERROR("soc is secure. (return value:%x)\n", ret);
+	}else{
+		ERROR("soc is normal. (return value:%x)\n", ret);
+	}
+	close(fd);
+	return ret;
+}
+
 static int device_is_secure() {
     int ret = -1;
     char value[PROP_VALUE_MAX];
-    ret = __system_property_get("ro.secure", value);
-    /* If error, we want to fail secure */
-    if (ret < 0)
+
+	if( !check_soc_is_secure()){
+		INFO("Don't verity system on normal chipset\n");
+		return 0 ;
+	}
+
+	INFO("Device is secure, FIVM will be enabled!!\n");
         return 1;
-    return strcmp(value, "0") ? 1 : 0;
 }
 
 static int device_is_force_encrypted() {
@@ -336,6 +514,7 @@ static int mount_with_alternatives(struct fstab *fstab, int start_idx, int *end_
             if (fstab->recs[i].fs_mgr_flags & MF_CHECK) {
                 check_fs(fstab->recs[i].blk_device, fstab->recs[i].fs_type,
                          fstab->recs[i].mount_point);
+
             }
             if (!__mount(fstab->recs[i].blk_device, fstab->recs[i].mount_point, &fstab->recs[i])) {
                 *attempted_idx = i;
@@ -497,12 +676,14 @@ int fs_mgr_mount_all(struct fstab *fstab)
     int mret = -1;
     int mount_errno = 0;
     int attempted_idx = -1;
-
+    int fd;
+	int file_verify = 0;
     if (!fstab) {
         return -1;
     }
 
     for (i = 0; i < fstab->num_entries; i++) {
+		file_verify = 0 ;
         /* Don't mount entries that are managed by vold */
         if (fstab->recs[i].fs_mgr_flags & (MF_VOLDMANAGED | MF_RECOVERYONLY)) {
             continue;
@@ -536,6 +717,10 @@ int fs_mgr_mount_all(struct fstab *fstab)
 
         if (fstab->recs[i].fs_mgr_flags & MF_WAIT) {
             wait_for_file(fstab->recs[i].blk_device, WAIT_TIMEOUT);
+        if (fstab->recs[i].fs_mgr_flags & MF_RESIZE) {
+	    ERROR("on flag MF_RESIZE start resize%s \n",fstab->recs[i].blk_device);
+            resize_ext4(fstab->recs[i].blk_device);
+        }
         }
 
         if ((fstab->recs[i].fs_mgr_flags & MF_VERIFY) && device_is_secure()) {
@@ -547,6 +732,14 @@ int fs_mgr_mount_all(struct fstab *fstab)
                 continue;
             }
         }
+
+		if ((fstab->recs[i].fs_mgr_flags & MF_FILE_VERIFY) &&
+			device_is_secure()){
+				INFO("mount file-system %s with file verify\n",
+					fstab->recs[i].mount_point);
+				file_verify = 1;
+		}
+
         int last_idx_inspected;
         int top_idx = i;
 
@@ -556,6 +749,15 @@ int fs_mgr_mount_all(struct fstab *fstab)
 
         /* Deal with encryptability. */
         if (!mret) {
+			if(file_verify == 1){
+				do{
+					if( fs_mgr_verity_file(fstab->recs[i].mount_point ) <0 ){
+						ERROR("Count not verified file list, unmount it!");
+						umount(fstab->recs[i].mount_point);
+					}
+
+				}while(0);
+			}
             int status = handle_encryptable(&fstab->recs[attempted_idx]);
 
             if (status == FS_MGR_MNTALL_FAIL) {
@@ -694,6 +896,10 @@ int fs_mgr_do_mount(struct fstab *fstab, char *n_name, char *n_blk_device,
         if (fstab->recs[i].fs_mgr_flags & MF_CHECK) {
             check_fs(n_blk_device, fstab->recs[i].fs_type,
                      fstab->recs[i].mount_point);
+        }
+
+        if (fstab->recs[i].fs_mgr_flags & MF_RESIZE) {
+            resize_ext4(n_blk_device);
         }
 
         if ((fstab->recs[i].fs_mgr_flags & MF_VERIFY) && device_is_secure()) {

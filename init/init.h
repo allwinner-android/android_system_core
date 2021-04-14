@@ -41,4 +41,6 @@ void register_epoll_handler(int fd, void (*fn)());
 
 int add_environment(const char* key, const char* val);
 
+int checkService(const char *path,const char * sevice_name);
+
 #endif  /* _INIT_INIT_H */

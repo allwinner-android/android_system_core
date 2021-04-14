@@ -49,6 +49,7 @@
 #include <bootloader_message_writer.h>
 #include <cutils/partition_utils.h>
 #include <cutils/android_reboot.h>
+#include <cutils/fs.h>
 #include <logwrap/logwrap.h>
 #include <private/android_filesystem_config.h>
 
@@ -62,6 +63,7 @@
 #include "service.h"
 #include "signal_handler.h"
 #include "util.h"
+#include "libboot.h"
 
 #define chmod DO_NOT_USE_CHMOD_USE_FCHMODAT_SYMLINK_NOFOLLOW
 #define UNMOUNT_CHECK_MS 5000
@@ -535,6 +537,11 @@ static int do_mount_all(const std::vector<std::string>& args) {
         fs_mgr_free_fstab(fstab);
         if (child_ret == -1) {
             ERROR("fs_mgr_mount_all returned an error\n");
+            ERROR("                                               \n");
+            ERROR("===============================================\n");
+            ERROR("| This Android Device will start-up failed!!! |\n");
+            ERROR("===============================================\n");
+            ERROR("                                               \n");
         }
         _exit(child_ret);
     } else {
@@ -929,8 +936,66 @@ static int do_installkey(const std::vector<std::string>& args) {
                                      do_installkeys_ensure_dir_exists);
 }
 
+static int e4crypt_is_emulated() {
+    int result = false;
+    char buf[PROP_VALUE_MAX];
+    int len = __system_property_get("persist.sys.emulate_fbe", buf);
+    if (len == 1) {
+        char ch = buf[0];
+        if (ch == '0' || ch == 'n') {
+            result = false;
+        } else if (ch == '1' || ch == 'y') {
+            result = true;
+        }
+    } else if (len > 1) {
+        if (!strcmp(buf, "no") || !strcmp(buf, "false") || !strcmp(buf, "off")) {
+            result = false;
+        } else if (!strcmp(buf, "yes") || !strcmp(buf, "true") || !strcmp(buf, "on")) {
+            result = true;
+        }
+    }
+
+    return result;
+}
+
 static int do_init_user0(const std::vector<std::string>& args) {
+
+    if (!e4crypt_is_native() && !e4crypt_is_emulated()) {
+        const char *system_legacy_path = "/data/system/users/0";
+        const char* misc_legacy_path = "/data/misc/user/0";
+        const char* profiles_de_path = "/data/misc/profiles/cur/0";
+        const char* foreign_de_path = "/data/misc/profiles/cur/0/foreign-dex";
+
+        // DE_n key
+        const char* system_de_path = "/data/system_de/0";
+        const char* misc_de_path = "/data/misc_de/0";
+        const char* user_de_path = "/data/user_de/0";
+        if (fs_prepare_dir(system_legacy_path, 0700, AID_SYSTEM, AID_SYSTEM)) goto default_way;
+        if (fs_prepare_dir(misc_legacy_path, 0750, multiuser_get_uid(0, AID_SYSTEM),
+                multiuser_get_uid(0, AID_EVERYBODY))) goto default_way;
+        if (fs_prepare_dir(profiles_de_path, 0771, AID_SYSTEM, AID_SYSTEM)) goto default_way;
+        if (fs_prepare_dir(foreign_de_path, 0773, AID_SYSTEM, AID_SYSTEM)) goto default_way;
+
+        if (fs_prepare_dir(system_de_path, 0770, AID_SYSTEM, AID_SYSTEM)) goto default_way;
+        if (fs_prepare_dir(misc_de_path, 01771, AID_SYSTEM, AID_MISC)) goto default_way;
+        if (fs_prepare_dir(user_de_path, 0771, AID_SYSTEM, AID_SYSTEM)) goto default_way;
+
+        fchmodat(AT_FDCWD, "/data/system_ce/0",0771, AT_SYMLINK_NOFOLLOW);
+        fchmodat(AT_FDCWD, "/data/misc_ce/0",0771, AT_SYMLINK_NOFOLLOW);
+        fchmodat(AT_FDCWD, "/data/user_ce/0",0771, AT_SYMLINK_NOFOLLOW);
+        fchmodat(AT_FDCWD, "/data/media_ce/0",0771, AT_SYMLINK_NOFOLLOW);
+        return 0;
+    }
+default_way:
     return e4crypt_do_init_user0();
+}
+
+static int do_ubootparam(const std::vector<std::string>& args) {
+    const char *name = args[1].c_str();
+    const char *prop_val = args[2].c_str();
+
+	libboot_sync_display_param_keyvalue(name, (char *)prop_val);
+	return 0;
 }
 
 BuiltinFunctionMap::Map& BuiltinFunctionMap::map() const {
@@ -976,6 +1041,7 @@ BuiltinFunctionMap::Map& BuiltinFunctionMap::map() const {
         {"verity_update_state",     {0,     0,    do_verity_update_state}},
         {"wait",                    {1,     2,    do_wait}},
         {"write",                   {2,     2,    do_write}},
+        {"ubootparam",              {2,     2,    do_ubootparam}},
     };
     return builtin_functions;
 }

@@ -89,6 +89,19 @@ public:
     off64_t getDataOffset(void) const { return mDataOffset; }
 
     /*
+     * Get a "copy" of the object.
+     */
+    FileMap* acquire(void) { mRefCount++; return this; }
+
+    /*
+     * Call this when mapping is no longer needed.
+     */
+    void release(void) {
+        if (--mRefCount <= 0)
+            delete this;
+    }
+
+    /*
      * This maps directly to madvise() values, but allows us to avoid
      * including <sys/mman.h> everywhere.
      */
@@ -110,6 +123,7 @@ private:
     FileMap(const FileMap& src);
     const FileMap& operator=(const FileMap& src);
 
+    int         mRefCount;      // reference count
     char*       mFileName;      // original file name, if known
     void*       mBasePtr;       // base of mmap area; page aligned
     size_t      mBaseLength;    // length, measured from "mBasePtr"

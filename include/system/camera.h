@@ -88,6 +88,12 @@ enum {
     // Notify on autofocus start and stop. This is useful in continuous
     // autofocus - FOCUS_MODE_CONTINUOUS_VIDEO and FOCUS_MODE_CONTINUOUS_PICTURE.
     CAMERA_MSG_FOCUS_MOVE = 0x0800,       // notifyCallback
+    //by zhengjiangwei  for Camera in Android N
+    CAMERA_MSG_CONTINUOUSSNAP = 0x1000,    //notifyCallback for continuous snap
+    CAMERA_MSG_SNAP = 0x2000,              //notifyCallback of setting camera idle  for single snap
+    CAMERA_MSG_SNAP_THUMB = 0x4000,        //notifyCallback of saving thumb for single snap
+    CAMERA_MSG_SNAP_FD= 0x8000,            //notifyCallback of requesting fd for single and continuoussnap
+
     CAMERA_MSG_ALL_MSGS = 0xFFFF
 };
 
@@ -189,7 +195,20 @@ enum {
      * IMPLEMENTATION_DEFINED, then HALv3 devices will use gralloc usage flags
      * of SW_READ_OFTEN.
      */
-    CAMERA_CMD_SET_VIDEO_FORMAT = 11
+    CAMERA_CMD_SET_VIDEO_FORMAT = 11,
+   //by zhengjiangwei  for Camera in Android N
+   /**
+     * Start the smart detection.
+     */
+	CAMERA_CMD_START_SMART_DETECTION = 100,
+
+    /**
+     * Stop the smart detection.
+     */
+    CAMERA_CMD_STOP_SMART_DETECTION = 200,
+
+    CAMERA_CMD_SET_SCREEN_ID = 0x0F000000,
+    CAMERA_CMD_SET_CEDARX_RECORDER = 0x0F000001,
 };
 
 /** camera fatal errors */
@@ -292,6 +311,38 @@ typedef struct camera_frame_metadata {
      */
     camera_face_t *faces;
 } camera_frame_metadata_t;
+
+//by zhengjiangwei for Camera in Android N
+/**
+ * The metadata of the face detection result.
+ */
+typedef struct camera_face_smile_status {
+    /**
+     * The number of detected faces in the frame.
+     */
+    int32_t number_of_smiles;
+    /**
+     * An array of the detected smiles. The length is number_of_smiles.
+     */
+    int32_t *smiles;
+} camera_face_smile_status_t;
+
+
+/**
+ * The metadata of the face detection result.
+ */
+typedef struct camera_face_blink_status {
+    /**
+     * The number of detected faces in the frame.
+     */
+    int32_t number_of_blinks;
+    /**
+     * An array of the detected blinks. The length is number_of_blinks.
+     */
+    int32_t *blinks;
+} camera_face_blink_status_t;
+
+
 
 __END_DECLS
 

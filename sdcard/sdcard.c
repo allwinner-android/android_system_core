@@ -95,6 +95,7 @@
 
 #define PROP_SDCARDFS_DEVICE "ro.sys.sdcardfs"
 #define PROP_SDCARDFS_USER "persist.sys.sdcardfs"
+#define PROP_3RDAPP_WRITE_EXTERNAL_STORAGE "ro.config.writeexternalstorage"
 
 #define FUSE_UNKNOWN_INO 0xffffffff
 
@@ -1896,9 +1897,19 @@ static void run(const char* source_path, const char* label, uid_t uid,
         /* Physical storage is readable by all users on device, but
          * the Android directories are masked off to a single user
          * deep inside attr_from_stat(). */
+        mode_t write_permission;
+        char property_value[PROPERTY_VALUE_MAX];
+        property_get(PROP_3RDAPP_WRITE_EXTERNAL_STORAGE, property_value, "0");
+        if(!strcmp(property_value, "1")){
+            ALOGW("open up write_external_permission to 3rd apps");
+            write_permission = 0002;
+        }else{
+            ALOGW("close write_external_permission to 3rd apps");
+            write_permission = 0022;
+        }
         if (fuse_setup(&fuse_default, AID_SDCARD_RW, 0006)
                 || fuse_setup(&fuse_read, AID_EVERYBODY, full_write ? 0027 : 0022)
-                || fuse_setup(&fuse_write, AID_EVERYBODY, full_write ? 0007 : 0022)) {
+                || fuse_setup(&fuse_write, AID_EVERYBODY, full_write ? 0007 : write_permission)) {
             ERROR("failed to fuse_setup\n");
             exit(1);
         }

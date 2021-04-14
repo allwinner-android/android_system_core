@@ -60,6 +60,28 @@ typedef enum android_pixel_format {
     HAL_PIXEL_FORMAT_BGRA_8888          = 5,
 
     /*
+     * sRGB color pixel formats:
+     *
+     * The red, green and blue components are stored in sRGB space, and converted
+     * to linear space when read, using the standard sRGB to linear equation:
+     *
+     * Clinear = Csrgb / 12.92                  for Csrgb <= 0.04045
+     *         = (Csrgb + 0.055 / 1.055)^2.4    for Csrgb >  0.04045
+     *
+     * When written the inverse transformation is performed:
+     *
+     * Csrgb = 12.92 * Clinear                  for Clinear <= 0.0031308
+     *       = 1.055 * Clinear^(1/2.4) - 0.055  for Clinear >  0.0031308
+     *
+     *
+     *  The alpha component, if present, is always stored in linear space and
+     *  is left unmodified when read or written.
+     *
+     */
+    HAL_PIXEL_FORMAT_sRGB_A_8888        = 0xC,
+    HAL_PIXEL_FORMAT_sRGB_X_8888        = 0xD,
+
+    /*
      * 0x100 - 0x1FF
      *
      * This range is reserved for pixel formats that are specific to the HAL
@@ -69,6 +91,25 @@ typedef enum android_pixel_format {
      * gralloc buffer of one of these formats must be supported for use with the
      * GL_OES_EGL_image_external OpenGL ES extension.
      */
+    HAL_PIXEL_FORMAT_AW_NV12		    = 0x101, /* yuv420: [8bit: yyyy  uvuv] */
+    /*
+     * HAL_PIXEL_FORMAT_AW_MB420  		    = 0x102,
+     * HAL_PIXEL_FORMAT_AW_MB411  		    = 0x103,
+     * HAL_PIXEL_FORMAT_AW_MB422  		    = 0x104,
+     * HAL_PIXEL_FORMAT_AW_YUV_PLANNER420  = 0x105, // YU12
+     * HAL_PIXEL_FORMAT_AW_YVU_PLANNER420 = 0x106, //YV12
+     * HAL_PIXEL_FORMAT_AW_NV21			= 0x107,
+     */
+
+    HAL_PIXEL_FORMAT_AW_NV12_10bit = 0x108, /* yuv420: [8bit: yyyy  uvuv] [2bit: yyyy uvuv] */
+    HAL_PIXEL_FORMAT_AW_NV21_10bit = 0x109, /* yuv420: [8bit: yyyy  vuvu] [2bit: yyyy uvuv] */
+    HAL_PIXEL_FORMAT_AW_YV12_10bit = 0x10A, /* yuv420: [8bit: yyyy  vv uu] [2bit: yyyy uvuv] */
+    HAL_PIXEL_FORMAT_AW_I420_10bit = 0x10B, /* yuv420: [8bit: yyyy  uu vv] [2bit: yyyy uvuv] */
+
+    HAL_PIXEL_FORMAT_AW_P010_UV = 0x10C, /* Planar, 4:2:0, 10bit, (yyyy, uvuv) */
+    HAL_PIXEL_FORMAT_AW_P010_VU = 0x10D, /* Planar, 4:2:0, 10bit, (yyyy, vuvu) */
+    HAL_PIXEL_FORMAT_AW_P210_UV = 0x10E, /* Planar, 4:2:2, 10bit, (yyyy, uvuv) */
+    HAL_PIXEL_FORMAT_AW_P210_VU = 0x10F, /* Planar, 4:2:2, 10bit, (yyyy, vuvu) */
 
     /*
      * Android YUV format:
@@ -96,7 +137,7 @@ typedef enum android_pixel_format {
      * When used with ANativeWindow, the dataSpace field describes the color
      * space of the buffer.
      */
-    HAL_PIXEL_FORMAT_YV12   = 0x32315659, // YCrCb 4:2:0 Planar
+    HAL_PIXEL_FORMAT_YV12   = 0x32315659, /* yuv420: [8bit: yyyy  vv uu] */
 
 
     /*
@@ -439,7 +480,7 @@ typedef enum android_pixel_format {
 
     /* Legacy formats (deprecated), used by ImageFormat.java */
     HAL_PIXEL_FORMAT_YCbCr_422_SP       = 0x10, // NV16
-    HAL_PIXEL_FORMAT_YCrCb_420_SP       = 0x11, // NV21
+    HAL_PIXEL_FORMAT_YCrCb_420_SP       = 0x11, /* yuv420: [8bit: yyyy  vuvu] */
     HAL_PIXEL_FORMAT_YCbCr_422_I        = 0x14, // YUY2
 } android_pixel_format_t;
 

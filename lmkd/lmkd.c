@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "lowmemorykiller"
+#define LOG_TAG "lmkd"
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -576,6 +576,10 @@ static int kill_one_process(struct proc *procp, int other_free, int other_file,
           taskname, pid, uid, procp->oomadj, tasksize * page_k,
           first ? "" : "~", other_file * page_k, minfree * page_k, min_score_adj,
           first ? "" : "~", other_free * page_k, other_free >= 0 ? "above" : "below");
+    for(int i=0;i<MAX_TARGETS;i++){
+	ALOGD("lowmem_adj[i] = %d lowmem_minfree[i] = %d",lowmem_adj[i],lowmem_minfree[i]);
+    }
+    ALOGD("\n");
     r = kill(pid, SIGKILL);
     killProcessGroup(uid, pid, SIGKILL);
     pid_remove(pid);

@@ -72,12 +72,14 @@ static struct flag_list fs_mgr_flags[] = {
     { "swapprio=",   MF_SWAPPRIO },
     { "zramsize=",   MF_ZRAMSIZE },
     { "verify",      MF_VERIFY },
+	{ "file_verify", MF_FILE_VERIFY},
     { "noemulatedsd", MF_NOEMULATEDSD },
     { "notrim",       MF_NOTRIM },
     { "formattable", MF_FORMATTABLE },
     { "slotselect",  MF_SLOTSELECT },
     { "nofail",      MF_NOFAIL },
     { "defaults",    0 },
+    { "resize", MF_RESIZE},
     { 0,             0 },
 };
 

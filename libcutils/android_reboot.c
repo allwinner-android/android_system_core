@@ -209,6 +209,8 @@ out:
     free_entries(&ro_entries);
 }
 
+extern int write_misc(const char *reason);
+
 int android_reboot_with_callback(
     int cmd, int flags __unused, const char *arg,
     void (*cb_on_remount)(const struct mntent*))
@@ -225,8 +227,10 @@ int android_reboot_with_callback(
             break;
 
         case ANDROID_RB_RESTART2:
-            ret = syscall(__NR_reboot, LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2,
-                           LINUX_REBOOT_CMD_RESTART2, arg);
+            //ret = syscall(__NR_reboot, LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2,
+            //               LINUX_REBOOT_CMD_RESTART2, arg);
+            write_misc(arg);
+            ret = reboot(RB_AUTOBOOT);
             break;
 
         default:

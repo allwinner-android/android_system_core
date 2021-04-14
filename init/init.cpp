@@ -85,6 +85,8 @@ bool waiting_for_exec = false;
 
 static int epoll_fd = -1;
 
+extern int start_displayinit_thread(void);
+
 void register_epoll_handler(int fd, void (*fn)()) {
     epoll_event ev;
     ev.events = EPOLLIN;
@@ -340,7 +342,7 @@ static int set_mmap_rnd_bits_action(const std::vector<std::string>& args)
 #endif
     if (ret == -1) {
         ERROR("Unable to set adequate mmap entropy value!\n");
-        security_failure();
+        //security_failure();
     }
     return ret;
 }
@@ -385,6 +387,7 @@ static int console_init_action(const std::vector<std::string>& args)
         close(fd);
     }
 
+	start_displayinit_thread();
     return 0;
 }
 
@@ -469,7 +472,7 @@ static void process_kernel_dt() {
 
 static void process_kernel_cmdline() {
     // Don't expose the raw commandline to unprivileged processes.
-    chmod("/proc/cmdline", 0440);
+    chmod("/proc/cmdline", 0444);
 
     // The first pass does the common stuff, and finds if we are in qemu.
     // The second pass is only necessary for qemu to export all kernel params
@@ -547,6 +550,25 @@ static int audit_callback(void *data, security_class_t /*cls*/, char *buf, size_
     return 0;
 }
 
+
+int CheckService(const char * path, const char * service_name){
+    FILE *infile = fopen(path, "r");
+    if(infile == NULL) return -1;
+    char buffer[256] = {0x0};
+    while(fgets(buffer, sizeof(buffer), infile) != NULL){
+        if(strstr(buffer, service_name)){
+            //the service exists in file
+            fclose(infile);
+            return 1;
+        }
+    }
+    if(infile != NULL){
+        fclose(infile);
+    }
+    return 0;
+}
+
+
 static void selinux_initialize(bool in_kernel_domain) {
     Timer t;
 
@@ -565,11 +587,21 @@ static void selinux_initialize(bool in_kernel_domain) {
 
         bool kernel_enforcing = (security_getenforce() == 1);
         bool is_enforcing = selinux_is_enforcing();
-        if (kernel_enforcing != is_enforcing) {
-            if (security_setenforce(is_enforcing)) {
-                ERROR("security_setenforce(%s) failed: %s\n",
-                      is_enforcing ? "true" : "false", strerror(errno));
-                security_failure();
+        //check if it's recovery mode
+        int recovery_mode = CheckService("/init.rc", "service recovery ");
+        if(recovery_mode == 1){
+        //set selinux to permissive
+            if (security_setenforce(false) < 0) {
+                ERROR("security_setenforce false failed!!: %s\n", strerror(errno));
+            }
+        }
+        else{
+            if (kernel_enforcing != is_enforcing) {
+                if (security_setenforce(is_enforcing)) {
+                    ERROR("security_setenforce(%s) failed: %s\n",
+                        is_enforcing ? "true" : "false", strerror(errno));
+                    security_failure();
+                }
             }
         }
 
@@ -608,7 +640,7 @@ int main(int argc, char** argv) {
         mkdir("/dev/socket", 0755);
         mount("devpts", "/dev/pts", "devpts", 0, NULL);
         #define MAKE_STR(x) __STRING(x)
-        mount("proc", "/proc", "proc", 0, "hidepid=2,gid=" MAKE_STR(AID_READPROC));
+        mount("proc", "/proc", "proc", 0, "gid=" MAKE_STR(AID_READPROC));
         mount("sysfs", "/sys", "sysfs", 0, NULL);
     }
 
@@ -673,7 +705,7 @@ int main(int argc, char** argv) {
     }
 
     signal_handler_init();
-
+    get_kernel_cmdline_partitions();
     property_load_boot_defaults();
     export_oem_lock_status();
     start_property_service();
@@ -686,6 +718,7 @@ int main(int argc, char** argv) {
     parser.AddSectionParser("on", std::make_unique<ActionParser>());
     parser.AddSectionParser("import", std::make_unique<ImportParser>());
     parser.ParseConfig("/init.rc");
+
 
     ActionManager& am = ActionManager::GetInstance();
 

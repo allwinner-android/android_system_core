@@ -31,6 +31,18 @@
 #include <linux/ion.h>
 #include <ion/ion.h>
 
+
+#define ION_IOC_SUNXI_FLUSH_RANGE           5
+#define ION_IOC_SUNXI_FLUSH_ALL             6
+#define ION_IOC_SUNXI_PHYS_ADDR             7
+#define ION_IOC_SUNXI_DMA_COPY              8
+
+typedef struct {
+    ion_user_handle_t handle;
+    unsigned int phys_addr;
+    unsigned int size;
+}sunxi_phys_data;
+
 int ion_open()
 {
     int fd = open("/dev/ion", O_RDWR);
@@ -175,4 +187,18 @@ int ion_sync_fd(int fd, int handle_fd)
         .fd = handle_fd,
     };
     return ion_ioctl(fd, ION_IOC_SYNC, &data);
+}
+
+unsigned long ion_getphyadr(int fd,ion_user_handle_t handle)
+{
+	int ret = 0;
+	struct ion_custom_data custom_data;
+	sunxi_phys_data phys_data;
+	custom_data.cmd = ION_IOC_SUNXI_PHYS_ADDR;
+    phys_data.handle = handle;
+	custom_data.arg = (unsigned long)&phys_data;
+	ret = ioctl(fd, ION_IOC_CUSTOM, &custom_data);
+	if(ret < 0)
+		return 0;
+    return phys_data.phys_addr;
 }

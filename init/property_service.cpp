@@ -62,7 +62,9 @@
 static int persistent_properties_loaded = 0;
 
 static int property_set_fd = -1;
-
+#ifdef AW_BOOSTUP_ENABLE
+int aw_boost_up_perf(const char *name, const char *value);
+#endif
 void property_init() {
     if (__system_property_area_init()) {
         ERROR("Failed to initialize property area\n");
@@ -217,6 +219,12 @@ static int property_set_impl(const char* name, const char* value) {
          */
         write_persistent_property(name, value);
     }
+	/*
+	*  use boost up for all winner
+	*/
+#ifdef AW_BOOSTUP_ENABLE
+	aw_boost_up_perf(name, value);
+#endif
     property_changed(name, value);
     return 0;
 }

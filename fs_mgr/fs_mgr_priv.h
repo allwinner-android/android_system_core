@@ -84,7 +84,8 @@ __BEGIN_DECLS
 #define MF_SLOTSELECT   0x8000
 #define MF_FORCEFDEORFBE 0x10000
 #define MF_NOFAIL       0x40000
-
+#define MF_FILE_VERIFY  0x10000000
+#define MF_RESIZE       0x20000000
 #define DM_BUF_SIZE 4096
 
 int fs_mgr_set_blk_ro(const char *blockdev);

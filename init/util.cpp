@@ -492,6 +492,8 @@ bool is_dir(const char* pathname) {
     return S_ISDIR(info.st_mode);
 }
 
+
+
 bool expand_props(const std::string& src, std::string* dst) {
     const char* src_ptr = src.c_str();
 
@@ -561,3 +563,74 @@ bool expand_props(const std::string& src, std::string* dst) {
 
     return true;
 }
+
+void get_kernel_cmdline_partitions(void)
+{
+	char cmdline[1024], partition_dev[64], partition_name[64];
+	char *ptr,*end;
+	int fd, len;
+	char dev[64], partition[64];
+
+	mkdir("/dev/block", 0755);
+	mkdir("/dev/block/by-name", 0755);
+
+	fd = open("/proc/cmdline", O_RDONLY);
+	if (fd >= 0) {
+		int n = read(fd, cmdline, 1023);
+		if (n < 0) n = 0;
+
+		/* get rid of trailing newline, it happens */
+		if (n > 0 && cmdline[n-1] == '\n') n--;
+
+		cmdline[n] = 0;
+		close(fd);
+	} else {
+		cmdline[0] = 0;
+	}
+	//LOG(ERROR)("get_kernel_cmdline_partitions! %s\n",cmdline);
+	ptr = strstr(cmdline, "partitions=");
+	if (ptr == NULL) {
+		//ERROR(">> cmdline not contain partition info!\n");
+		return;
+	}
+	ptr += strlen("partitions=");
+        
+        end = strstr(ptr," ");
+        if(end>0)
+          *end = 0;
+        //ERROR("ptr = %s",ptr);
+	memset(dev, 0, sizeof(dev));
+	memset(partition, 0, sizeof(partition));
+	memset(partition_dev, 0, sizeof(partition_dev));
+	memset(partition_name, 0, sizeof(partition_name));
+
+	while (ptr && *ptr!=0) {
+		char *x = strchr(ptr, '@');
+		len = x - ptr;
+		memccpy(partition_name, ptr, '@', len);
+		ptr = x + 1;
+		x = strchr(ptr, ':');
+		if(x == NULL) {
+			len = strlen(ptr);
+		} else {
+			len = x - ptr;
+		}
+
+		memccpy(partition_dev, ptr, ':', len);
+		snprintf(partition, sizeof(partition), "/dev/block/by-name/%s", partition_name);
+		snprintf(dev, sizeof(dev), "/dev/block/%s", partition_dev);
+		
+		//ERROR("dev = %s partition = %s\n",dev,partition);
+		symlink(dev, partition);
+		memset(dev, 0, sizeof(dev));
+		memset(partition, 0, sizeof(partition));
+		memset(partition_dev, 0, sizeof(partition_dev));
+		memset(partition_name, 0, sizeof(partition_name));
+
+		if(x == NULL)
+			break;
+		else
+			ptr = x + 1;
+	}
+}
+

@@ -314,6 +314,9 @@ enum {
     NATIVE_WINDOW_SET_SURFACE_DAMAGE        = 20,   /* private */
     NATIVE_WINDOW_SET_SHARED_BUFFER_MODE    = 21,
     NATIVE_WINDOW_SET_AUTO_REFRESH          = 22,
+
+	NATIVE_WINDOW_SETPARAMETER              = 50,
+	NATIVE_WINDOW_GETPARAMETER              = 51
 };
 
 /* parameter for NATIVE_WINDOW_[API_][DIS]CONNECT */

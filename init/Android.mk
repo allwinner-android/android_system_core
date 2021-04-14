@@ -7,10 +7,20 @@ LOCAL_PATH:= $(call my-dir)
 ifneq (,$(filter userdebug eng,$(TARGET_BUILD_VARIANT)))
 init_options += -DALLOW_LOCAL_PROP_OVERRIDE=1 -DALLOW_PERMISSIVE_SELINUX=1
 else
-init_options += -DALLOW_LOCAL_PROP_OVERRIDE=0 -DALLOW_PERMISSIVE_SELINUX=0
+init_options += -DALLOW_LOCAL_PROP_OVERRIDE=0 -DALLOW_PERMISSIVE_SELINUX=1
 endif
 
 init_options += -DLOG_UEVENTS=0
+
+ifeq ($(strip $(TARGET_USE_BOOSTUP_OPZ)), true)
+init_options += -DAW_BOOSTUP_ENABLE=1
+ifeq ($(strip $(SW_CHIP_PLATFORM)), H5)
+init_options += -DSUN50IW2P1=1
+endif
+ifeq ($(strip $(SW_CHIP_PLATFORM)), H6)
+init_options += -DSUN50IW6P1=1
+endif
+endif
 
 init_cflags += \
     $(init_options) \
@@ -71,11 +81,18 @@ LOCAL_SRC_FILES:= \
     ueventd.cpp \
     ueventd_parser.cpp \
     watchdogd.cpp \
+	display/policySelector.cpp \
+	display/displayinit_thread.cpp
+
+ifeq ($(strip $(TARGET_USE_BOOSTUP_OPZ)), true)
+LOCAL_SRC_FILES+= boostup.cpp
+endif
 
 LOCAL_MODULE:= init
 LOCAL_C_INCLUDES += \
     system/extras/ext4_utils \
-    system/core/mkbootimg
+    system/core/mkbootimg \
+	hardware/aw/lib/libboot
 
 LOCAL_FORCE_STATIC_EXECUTABLE := true
 LOCAL_MODULE_PATH := $(TARGET_ROOT_OUT)
@@ -97,11 +114,13 @@ LOCAL_STATIC_LIBRARIES := \
     libselinux \
     liblog \
     libmincrypt \
+	libboot \
     libcrypto_static \
     libc++_static \
     libdl \
     libsparse_static \
     libz
+
 
 # Create symlinks
 LOCAL_POST_INSTALL_CMD := $(hide) mkdir -p $(TARGET_ROOT_OUT)/sbin; \

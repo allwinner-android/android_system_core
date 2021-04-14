@@ -371,11 +371,12 @@ static void readDmesg(LogAudit *al, LogKlog *kl) {
 // transitory per-client threads are created for each reader.
 int main(int argc, char *argv[]) {
     int fdPmesg = -1;
-    bool klogd = property_get_bool("logd.kernel",
+    /*bool klogd = property_get_bool("logd.kernel",
                                    BOOL_DEFAULT_TRUE |
                                    BOOL_DEFAULT_FLAG_PERSIST |
                                    BOOL_DEFAULT_FLAG_ENG |
-                                   BOOL_DEFAULT_FLAG_SVELTE);
+                                   BOOL_DEFAULT_FLAG_SVELTE);*/
+    bool klogd = false;
     if (klogd) {
         fdPmesg = open("/proc/kmsg", O_RDONLY | O_NDELAY);
     }

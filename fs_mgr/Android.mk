@@ -20,7 +20,8 @@ LOCAL_SRC_FILES:= \
     fs_mgr_format.c \
     fs_mgr_fstab.c \
     fs_mgr_slotselect.c \
-    fs_mgr_verity.cpp
+    fs_mgr_verity.cpp \
+    fs_mgr_fivm.c
 LOCAL_C_INCLUDES := \
     $(LOCAL_PATH)/include \
     system/vold \
@@ -51,6 +52,7 @@ LOCAL_STATIC_LIBRARIES := libfs_mgr \
     libcutils \
     liblog \
     libc \
+    libmincrypt \
     libsparse_static \
     libz \
     libselinux
